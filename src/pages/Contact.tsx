@@ -26,7 +26,7 @@ export default function Contact({ onBack }: Props) {
         {t("contact.intro")}
       </p>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-8">
+      <div className="grid grid-cols-1 gap-4 mb-8 max-w-md">
         <div className="card flex items-start gap-4 animate-slide-up" style={{ animationDelay: "0s" }}>
           <span className="w-10 h-10 rounded-xl bg-blue-100 dark:bg-blue-500/20 flex items-center justify-center flex-shrink-0">
             <svg className="w-5 h-5 text-blue-600 dark:text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
@@ -35,19 +35,7 @@ export default function Contact({ onBack }: Props) {
           </span>
           <div>
             <h3 className="font-semibold text-gray-900 dark:text-white mb-1">{t("contact.email")}</h3>
-            <p className="text-gray-500 dark:text-gray-400 text-sm">contact@slimage.app</p>
-          </div>
-        </div>
-
-        <div className="card flex items-start gap-4 animate-slide-up" style={{ animationDelay: "0.1s" }}>
-          <span className="w-10 h-10 rounded-xl bg-green-100 dark:bg-green-500/20 flex items-center justify-center flex-shrink-0">
-            <svg className="w-5 h-5 text-green-600 dark:text-green-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
-            </svg>
-          </span>
-          <div>
-            <h3 className="font-semibold text-gray-900 dark:text-white mb-1">{t("contact.wechat")}</h3>
-            <p className="text-gray-500 dark:text-gray-400 text-sm">SlimageApp</p>
+            <a href="mailto:fanlnq@163.com" className="text-indigo-600 dark:text-indigo-400 hover:underline text-sm">fanlnq@163.com</a>
           </div>
         </div>
       </div>

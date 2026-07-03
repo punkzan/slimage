@@ -124,13 +124,20 @@ export interface Locale {
   "contact.title": string;
   "contact.intro": string;
   "contact.email": string;
-  "contact.wechat": string;
   "contact.response": string;
   "contact.back": string;
 
   // Blog page
   "blog.title": string;
   "blog.intro": string;
+  "blog.tip1.title": string;
+  "blog.tip1.body": string;
+  "blog.tip2.title": string;
+  "blog.tip2.body": string;
+  "blog.tip3.title": string;
+  "blog.tip3.body": string;
+  "blog.tip4.title": string;
+  "blog.tip4.body": string;
   "blog.back": string;
   "blog.addBtn": string;
   "blog.editBtn": string;

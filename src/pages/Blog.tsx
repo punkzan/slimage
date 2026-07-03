@@ -169,8 +169,11 @@ interface PostModalProps {
 
 function PostModal({ mode, initial, onSubmit, onClose }: PostModalProps) {
   const { t } = useT();
-  const [title, setTitle] = useState(initial?.title ?? "");
-  const [body, setBody] = useState(initial?.body ?? "");
+  // 编辑默认文章时，预填当前语言的翻译文本（而非 i18n 键）
+  const initialTitle = initial ? (initial.titleKey ? t(initial.titleKey as any) : initial.title) : "";
+  const initialBody = initial ? (initial.bodyKey ? t(initial.bodyKey as any) : initial.body) : "";
+  const [title, setTitle] = useState(initialTitle);
+  const [body, setBody] = useState(initialBody);
   const [icon, setIcon] = useState<BlogIcon>(initial?.icon ?? "lightbulb");
   const [error, setError] = useState("");
   const titleRef = useRef<HTMLInputElement>(null);
@@ -459,10 +462,10 @@ export default function Blog({ onBack }: Props) {
                 </span>
                 <div className="flex-1 min-w-0">
                   <h2 className="font-bold text-lg text-gray-900 dark:text-white mb-2">
-                    {post.title}
+                    {post.titleKey ? t(post.titleKey as any) : post.title}
                   </h2>
                   <p className="text-gray-600 dark:text-gray-400 leading-relaxed whitespace-pre-wrap break-words">
-                    {post.body}
+                    {post.bodyKey ? t(post.bodyKey as any) : post.body}
                   </p>
                 </div>
                 {/* 仅管理员可见编辑/删除按钮 */}
