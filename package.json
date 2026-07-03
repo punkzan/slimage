@@ -6,7 +6,8 @@
   "description": "在线图片智能压缩工具 — 基于 WASM 的纯前端方案",
   "scripts": {
     "dev": "vite",
-    "build": "tsc && vite build",
+    "build": "vite build",
+    "typecheck": "tsc --noEmit",
     "preview": "vite preview"
   },
   "dependencies": {
