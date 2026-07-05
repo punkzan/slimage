@@ -36,9 +36,19 @@ function verifyAdmin(req: any): boolean {
   return password === adminPassword;
 }
 
-/** 检查 KV 是否可用 */
+/**
+ * 检查 KV / Redis 是否可用。
+ * 兼容多套环境变量：
+ *   - 旧版 Vercel KV：KV_REST_API_URL + KV_REST_API_TOKEN
+ *   - 新版 Upstash Redis（Vercel Marketplace）：KV_REST_API_URL + KV_REST_API_TOKEN（同名）
+ *   - 通用 Redis URL：REDIS_URL / KV_URL
+ *   @vercel/kv 内部会自动识别这些环境变量。
+ */
 function isKvAvailable(): boolean {
-  return !!(process.env.KV_REST_API_URL && process.env.KV_REST_API_TOKEN);
+  if (process.env.KV_REST_API_URL && process.env.KV_REST_API_TOKEN) return true;
+  if (process.env.REDIS_URL) return true;
+  if (process.env.KV_URL) return true;
+  return false;
 }
 
 export default async function handler(req: any, res: any) {

@@ -94,8 +94,14 @@ export function useBlogPosts() {
     setError("");
     try {
       const { posts: apiPosts, fallback } = await fetchPosts();
-      setPosts(apiPosts.map(toBlogPost));
-      setUsingFallback(fallback);
+      if (fallback) {
+        // KV 未配置 → 用 localStorage（可能包含之前新增的文章）
+        setPosts(loadLocal());
+        setUsingFallback(true);
+      } else {
+        setPosts(apiPosts.map(toBlogPost));
+        setUsingFallback(false);
+      }
     } catch {
       // API 不可用（本地开发），使用 localStorage fallback
       setPosts(loadLocal());

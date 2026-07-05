@@ -163,11 +163,13 @@ function AdminLoginDialog({
 interface PostModalProps {
   mode: "add" | "edit";
   initial?: BlogPost;
+  submitting?: boolean;
+  externalError?: string;
   onSubmit: (data: NewBlogPost) => void;
   onClose: () => void;
 }
 
-function PostModal({ mode, initial, onSubmit, onClose }: PostModalProps) {
+function PostModal({ mode, initial, submitting, externalError, onSubmit, onClose }: PostModalProps) {
   const { t } = useT();
   // 编辑默认文章时，预填当前语言的翻译文本（而非 i18n 键）
   const initialTitle = initial ? (initial.titleKey ? t(initial.titleKey as any) : initial.title) : "";
@@ -293,14 +295,17 @@ function PostModal({ mode, initial, onSubmit, onClose }: PostModalProps) {
             {error && (
               <p className="text-sm text-red-500 dark:text-red-400 animate-fade-in">{error}</p>
             )}
+            {externalError && !error && (
+              <p className="text-sm text-red-500 dark:text-red-400 animate-fade-in">{externalError}</p>
+            )}
           </div>
 
           <div className="flex justify-end gap-2 flex-shrink-0 pt-2 border-t border-gray-100 dark:border-gray-800">
-            <button type="button" onClick={onClose} className="btn-secondary">
+            <button type="button" onClick={onClose} className="btn-secondary" disabled={submitting}>
               {t("blog.modal.cancel")}
             </button>
-            <button type="submit" className="btn-primary">
-              {t("blog.modal.save")}
+            <button type="submit" className="btn-primary disabled:opacity-50 disabled:cursor-not-allowed" disabled={submitting}>
+              {submitting ? "..." : t("blog.modal.save")}
             </button>
           </div>
         </form>
@@ -563,6 +568,8 @@ export default function Blog({ onBack }: Props) {
         <PostModal
           mode={modal.mode}
           initial={modal.post}
+          submitting={submitting}
+          externalError={error}
           onClose={() => setModal(null)}
           onSubmit={async (data) => {
             try {
