@@ -355,18 +355,27 @@ function ConfirmDialog({
 /* ================= 主页面 ================= */
 export default function Blog({ onBack }: Props) {
   const { t } = useT();
-  const { posts, addPost, updatePost, removePost } = useBlogPosts();
+  const { posts, loading, error, usingFallback, addPost, updatePost, removePost } = useBlogPosts();
   const { isAdmin, logout } = useAdminAuth();
   const [modal, setModal] = useState<{ mode: "add" | "edit"; post?: BlogPost } | null>(null);
   const [pendingDelete, setPendingDelete] = useState<string | null>(null);
   const [loginOpen, setLoginOpen] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
 
   const handleAdd = () => setModal({ mode: "add" });
   const handleEdit = (post: BlogPost) => setModal({ mode: "edit", post });
   const handleDeleteRequest = (id: string) => setPendingDelete(id);
-  const handleConfirmDelete = () => {
-    if (pendingDelete) removePost(pendingDelete);
-    setPendingDelete(null);
+  const handleConfirmDelete = async () => {
+    if (!pendingDelete) return;
+    try {
+      setSubmitting(true);
+      await removePost(pendingDelete);
+    } catch {
+      /* error 已在 hook 中设置 */
+    } finally {
+      setSubmitting(false);
+      setPendingDelete(null);
+    }
   };
 
   return (
@@ -436,7 +445,41 @@ export default function Blog({ onBack }: Props) {
 
       <p className="text-gray-500 dark:text-gray-400 mb-10">{t("blog.intro")}</p>
 
-      {posts.length === 0 ? (
+      {/* 加载中 */}
+      {loading && (
+        <div className="flex items-center justify-center py-16">
+          <svg className="w-8 h-8 text-indigo-500 animate-spin" fill="none" viewBox="0 0 24 24">
+            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+          </svg>
+        </div>
+      )}
+
+      {/* 错误提示 */}
+      {error && !loading && (
+        <div className="card text-center py-8 mb-6 border border-red-200 dark:border-red-500/30">
+          <p className="text-sm text-red-500 dark:text-red-400 mb-2">{error}</p>
+          <button onClick={() => window.location.reload()} className="text-xs text-indigo-500 hover:underline">
+            点击刷新重试
+          </button>
+        </div>
+      )}
+
+      {/* Fallback 提示（本地开发或 KV 未配置） */}
+      {usingFallback && isAdmin && !loading && (
+        <div className="mb-6 flex items-start gap-2 px-3 py-2 rounded-lg
+          bg-blue-50 dark:bg-blue-500/10 border border-blue-200 dark:border-blue-500/30
+          text-xs text-blue-700 dark:text-blue-400 animate-fade-in">
+          <svg className="w-4 h-4 flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+          <span className="leading-relaxed">
+            本地开发模式：文章仅存储在浏览器本地。生产环境请在 Vercel 中配置 KV 存储以实现全站共享。
+          </span>
+        </div>
+      )}
+
+      {!loading && !error && (posts.length === 0 ? (
         <div className="card text-center py-12 animate-fade-in">
           <div className="w-16 h-16 mx-auto mb-4 rounded-2xl bg-indigo-100 dark:bg-indigo-500/20 flex items-center justify-center text-indigo-500 dark:text-indigo-400">
             <Icon name="lightbulb" className="w-8 h-8" />
@@ -514,17 +557,24 @@ export default function Blog({ onBack }: Props) {
             </button>
           )}
         </div>
-      )}
+      ))}
 
       {modal && (
         <PostModal
           mode={modal.mode}
           initial={modal.post}
           onClose={() => setModal(null)}
-          onSubmit={(data) => {
-            if (modal.mode === "add") addPost(data);
-            else if (modal.post) updatePost(modal.post.id, data);
-            setModal(null);
+          onSubmit={async (data) => {
+            try {
+              setSubmitting(true);
+              if (modal.mode === "add") await addPost(data);
+              else if (modal.post) await updatePost(modal.post.id, data);
+              setModal(null);
+            } catch {
+              /* error 已在 hook 中设置 */
+            } finally {
+              setSubmitting(false);
+            }
           }}
         />
       )}

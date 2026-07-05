@@ -1,7 +1,8 @@
 // ============================================================
 // useAdminAuth — 管理员身份认证（localStorage 持久化）
-// 流程：输入密码 → 写入会话 → 24小时有效
-// 密码配置：DEFAULT_ADMIN_PASSWORD（仅前端演示用，生产请用后端校验）
+// 流程：输入密码 → 写入会话（含密码） → 24小时有效
+// 密码配置：DEFAULT_ADMIN_PASSWORD（前端预校验 + API 服务端校验）
+// API 写操作时从 session 读取密码，通过 x-admin-password 头发送
 // ============================================================
 
 import { useCallback, useEffect, useState } from "react";
@@ -10,9 +11,9 @@ const SESSION_KEY = "slimage-admin-session";
 const SESSION_TTL_MS = 24 * 60 * 60 * 1000; // 24 小时
 
 /**
- * 默认管理员密码。
- * 这是前端演示用的简单鉴权，真实场景应在服务端校验。
- * 如需修改密码，只改这里这一行即可。
+ * 默认管理员密码（前端预校验用）。
+ * 服务端通过 ADMIN_PASSWORD 环境变量校验（默认也是这个值）。
+ * 修改密码：在 Vercel → Settings → Environment Variables 设置 ADMIN_PASSWORD
  */
 const DEFAULT_ADMIN_PASSWORD = "slimage2024";
 
@@ -20,6 +21,8 @@ interface AdminSession {
   expiresAt: number;
   /** 仅作存储标记位，避免空对象被识别为有效会话 */
   ok: true;
+  /** 管理员密码（用于 API 写操作时的服务端校验） */
+  password: string;
 }
 
 function loadSession(): boolean {
@@ -38,11 +41,12 @@ function loadSession(): boolean {
   }
 }
 
-function saveSession(): void {
+function saveSession(password: string): void {
   try {
     const data: AdminSession = {
       ok: true,
       expiresAt: Date.now() + SESSION_TTL_MS,
+      password,
     };
     localStorage.setItem(SESSION_KEY, JSON.stringify(data));
   } catch {
@@ -75,7 +79,7 @@ export function useAdminAuth(): UseAdminAuth {
 
   const login = useCallback(async (password: string) => {
     if (password !== DEFAULT_ADMIN_PASSWORD) return false;
-    saveSession();
+    saveSession(password);
     setIsAdmin(true);
     return true;
   }, []);

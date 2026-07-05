@@ -1,13 +1,19 @@
 // ============================================================
-// useBlogPosts — 经验分享文章本地持久化（localStorage）
-// 增删改：addPost / updatePost / removePost
-// 数据结构：BlogPost = { id, title, body, createdAt, icon, titleKey?, bodyKey? }
-// 持久化：localStorage key = "slimage-blog-posts-v2"
-// 默认预置文章使用 i18n 键（titleKey/bodyKey），随语言切换
-// 用户创建/编辑的文章使用纯文本（title/body），不随语言切换
+// useBlogPosts — 经验分享文章（Vercel KV 后端）
+// 读取：GET /api/posts（公开）
+// 增删改：POST/PUT/DELETE /api/posts（管理员）
+// 本地开发 fallback：API 不可用时使用 localStorage
 // ============================================================
 
 import { useCallback, useEffect, useState } from "react";
+import {
+  fetchPosts,
+  createPost as apiCreatePost,
+  updatePost as apiUpdatePost,
+  deletePost as apiDeletePost,
+  type ApiBlogPost,
+  type NewPostData,
+} from "../lib/blogApi";
 
 export type BlogIcon = "image" | "sliders" | "stack" | "expand" | "lightbulb";
 
@@ -17,77 +23,8 @@ export interface BlogPost {
   body: string;
   createdAt: number;
   icon: BlogIcon;
-  /** i18n 键（仅默认预置文章使用，渲染时优先于 title） */
   titleKey?: string;
-  /** i18n 键（仅默认预置文章使用，渲染时优先于 body） */
   bodyKey?: string;
-}
-
-const STORAGE_KEY = "slimage-blog-posts-v2";
-
-/** 默认预置文章（首次访问时填充，使用 i18n 键随语言切换） */
-const DEFAULT_POSTS: BlogPost[] = [
-  {
-    id: "default-1",
-    title: "",
-    body: "",
-    titleKey: "blog.tip1.title",
-    bodyKey: "blog.tip1.body",
-    createdAt: Date.now() - 4 * 86400000,
-    icon: "image",
-  },
-  {
-    id: "default-2",
-    title: "",
-    body: "",
-    titleKey: "blog.tip2.title",
-    bodyKey: "blog.tip2.body",
-    createdAt: Date.now() - 3 * 86400000,
-    icon: "sliders",
-  },
-  {
-    id: "default-3",
-    title: "",
-    body: "",
-    titleKey: "blog.tip3.title",
-    bodyKey: "blog.tip3.body",
-    createdAt: Date.now() - 2 * 86400000,
-    icon: "stack",
-  },
-  {
-    id: "default-4",
-    title: "",
-    body: "",
-    titleKey: "blog.tip4.title",
-    bodyKey: "blog.tip4.body",
-    createdAt: Date.now() - 1 * 86400000,
-    icon: "expand",
-  },
-];
-
-function load(): BlogPost[] {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (raw) {
-      const parsed = JSON.parse(raw) as BlogPost[];
-      if (Array.isArray(parsed) && parsed.length > 0) return parsed;
-    }
-  } catch {
-    /* 解析失败：使用默认值 */
-  }
-  return DEFAULT_POSTS;
-}
-
-function save(posts: BlogPost[]): void {
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(posts));
-  } catch {
-    /* 写入失败：忽略（可能是隐私模式） */
-  }
-}
-
-function makeId(): string {
-  return `post-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
 export interface NewBlogPost {
@@ -96,60 +33,163 @@ export interface NewBlogPost {
   icon: BlogIcon;
 }
 
+// ---- localStorage fallback（本地开发用） ----
+const STORAGE_KEY = "slimage-blog-posts-v2";
+
+const DEFAULT_POSTS: BlogPost[] = [
+  { id: "default-1", title: "", body: "", titleKey: "blog.tip1.title", bodyKey: "blog.tip1.body", createdAt: Date.now() - 4 * 86400000, icon: "image" },
+  { id: "default-2", title: "", body: "", titleKey: "blog.tip2.title", bodyKey: "blog.tip2.body", createdAt: Date.now() - 3 * 86400000, icon: "sliders" },
+  { id: "default-3", title: "", body: "", titleKey: "blog.tip3.title", bodyKey: "blog.tip3.body", createdAt: Date.now() - 2 * 86400000, icon: "stack" },
+  { id: "default-4", title: "", body: "", titleKey: "blog.tip4.title", bodyKey: "blog.tip4.body", createdAt: Date.now() - 1 * 86400000, icon: "expand" },
+];
+
+function loadLocal(): BlogPost[] {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw) as BlogPost[];
+      if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+    }
+  } catch {
+    /* ignore */
+  }
+  return DEFAULT_POSTS;
+}
+
+function saveLocal(posts: BlogPost[]): void {
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(posts));
+  } catch {
+    /* ignore */
+  }
+}
+
+function makeId(): string {
+  return `post-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+}
+
+// ---- 类型转换 ----
+function toBlogPost(p: ApiBlogPost): BlogPost {
+  return {
+    id: p.id,
+    title: p.title,
+    body: p.body,
+    createdAt: p.createdAt,
+    icon: (p.icon as BlogIcon) || "lightbulb",
+    titleKey: p.titleKey,
+    bodyKey: p.bodyKey,
+  };
+}
+
+// ---- Hook ----
 export function useBlogPosts() {
   const [posts, setPosts] = useState<BlogPost[]>([]);
-  const [hydrated, setHydrated] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [usingFallback, setUsingFallback] = useState(false);
 
-  // 客户端首次挂载后从 localStorage 加载（避免 SSR 不一致）
+  // 初次加载：从 API 获取
+  const refresh = useCallback(async () => {
+    setLoading(true);
+    setError("");
+    try {
+      const { posts: apiPosts, fallback } = await fetchPosts();
+      setPosts(apiPosts.map(toBlogPost));
+      setUsingFallback(fallback);
+    } catch {
+      // API 不可用（本地开发），使用 localStorage fallback
+      setPosts(loadLocal());
+      setUsingFallback(true);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
   useEffect(() => {
-    setPosts(load());
-    setHydrated(true);
-  }, []);
+    refresh();
+  }, [refresh]);
 
-  // 任何变更后写回 localStorage
-  useEffect(() => {
-    if (!hydrated) return;
-    save(posts);
-  }, [posts, hydrated]);
+  const addPost = useCallback(
+    async (data: NewBlogPost) => {
+      try {
+        if (usingFallback) {
+          // 本地 fallback 模式
+          const newPost: BlogPost = {
+            id: makeId(),
+            title: data.title.trim() || "未命名文章",
+            body: data.body.trim(),
+            createdAt: Date.now(),
+            icon: data.icon,
+          };
+          setPosts((prev) => {
+            const updated = [newPost, ...prev];
+            saveLocal(updated);
+            return updated;
+          });
+          return;
+        }
+        const updated = await apiCreatePost(data as NewPostData);
+        setPosts(updated.map(toBlogPost));
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "操作失败");
+        throw err;
+      }
+    },
+    [usingFallback]
+  );
 
-  const addPost = useCallback((data: NewBlogPost) => {
-    setPosts((prev) => [
-      {
-        id: makeId(),
-        title: data.title.trim() || "未命名文章",
-        body: data.body.trim(),
-        createdAt: Date.now(),
-        icon: data.icon,
-      },
-      ...prev,
-    ]);
-  }, []);
+  const updatePost = useCallback(
+    async (id: string, data: NewBlogPost) => {
+      try {
+        if (usingFallback) {
+          setPosts((prev) => {
+            const updated = prev.map((p) =>
+              p.id === id
+                ? {
+                    ...p,
+                    title: data.title.trim() || "未命名文章",
+                    body: data.body.trim(),
+                    icon: data.icon,
+                    titleKey: undefined,
+                    bodyKey: undefined,
+                  }
+                : p
+            );
+            saveLocal(updated);
+            return updated;
+          });
+          return;
+        }
+        const updated = await apiUpdatePost(id, data as NewPostData);
+        setPosts(updated.map(toBlogPost));
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "操作失败");
+        throw err;
+      }
+    },
+    [usingFallback]
+  );
 
-  const updatePost = useCallback((id: string, data: NewBlogPost) => {
-    setPosts((prev) =>
-      prev.map((p) =>
-        p.id === id
-          ? {
-              ...p,
-              title: data.title.trim() || "未命名文章",
-              body: data.body.trim(),
-              icon: data.icon,
-              // 编辑后移除 i18n 键，变为纯文本文章
-              titleKey: undefined,
-              bodyKey: undefined,
-            }
-          : p
-      )
-    );
-  }, []);
+  const removePost = useCallback(
+    async (id: string) => {
+      try {
+        if (usingFallback) {
+          setPosts((prev) => {
+            const updated = prev.filter((p) => p.id !== id);
+            saveLocal(updated);
+            return updated;
+          });
+          return;
+        }
+        const updated = await apiDeletePost(id);
+        setPosts(updated.map(toBlogPost));
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "操作失败");
+        throw err;
+      }
+    },
+    [usingFallback]
+  );
 
-  const removePost = useCallback((id: string) => {
-    setPosts((prev) => prev.filter((p) => p.id !== id));
-  }, []);
-
-  const resetToDefault = useCallback(() => {
-    setPosts(DEFAULT_POSTS);
-  }, []);
-
-  return { posts, addPost, updatePost, removePost, resetToDefault };
+  return { posts, loading, error, usingFallback, addPost, updatePost, removePost, refresh };
 }
